@@ -136,6 +136,10 @@ final class PrivateDatabaseManager: DatabaseManager {
     
     private func fetchChangesInZones(_ callback: ((Error?) -> Void)? = nil) {
         let changesOp = CKFetchRecordZoneChangesOperation(recordZoneIDs: zoneIds, optionsByRecordZoneID: zoneIdOptions)
+        
+        var changedRecords = [String: [CKRecord]]()
+        var deletedRecordIds = [CKRecord.ID]()
+        
         changesOp.fetchAllChanges = true
         
         changesOp.recordZoneChangeTokensUpdatedBlock = { [weak self] zoneId, token, _ in
@@ -144,18 +148,21 @@ final class PrivateDatabaseManager: DatabaseManager {
             syncObject.zoneChangesToken = token
         }
         
-        changesOp.recordChangedBlock = { [weak self] record in
+        changesOp.recordChangedBlock = { record in
             /// The Cloud will return the modified record since the last zoneChangesToken, we need to do local cache here.
             /// Handle the record:
-            guard let self = self else { return }
-            guard let syncObject = self.syncObjects.first(where: { $0.recordType == record.recordType }) else { return }
-            syncObject.add(record: record)
+//            guard let self = self else { return }
+//            guard let syncObject = self.syncObjects.first(where: { $0.recordType == record.recordType }) else { return }
+//            syncObject.add(record: record)
+            let currentRecords = changedRecords[record.recordType] ?? []
+            changedRecords[record.recordType] = currentRecords + [record]
         }
         
-        changesOp.recordWithIDWasDeletedBlock = { [weak self] recordId, _ in
-            guard let self = self else { return }
-            guard let syncObject = self.syncObjects.first(where: { $0.zoneID == recordId.zoneID }) else { return }
-            syncObject.delete(recordID: recordId)
+        changesOp.recordWithIDWasDeletedBlock = { recordId, _ in
+//            guard let self = self else { return }
+//            guard let syncObject = self.syncObjects.first(where: { $0.zoneID == recordId.zoneID }) else { return }
+//            syncObject.delete(recordID: recordId)
+            deletedRecordIds.append(recordId)
         }
         
         changesOp.recordZoneFetchCompletionBlock = { [weak self](zoneId ,token, _, _, error) in
@@ -184,7 +191,28 @@ final class PrivateDatabaseManager: DatabaseManager {
         }
         
         changesOp.fetchRecordZoneChangesCompletionBlock = { [weak self] error in
-            guard let self = self else { return }
+            guard let self = self else { callback?(error) ; return }
+            
+            // Save to the sync objects in order. This way, parents are always added first and children second so there are no dangling references
+            for syncObject in self.syncObjects {
+//                for recordType in syncObject.recordTypes
+                    if let records = changedRecords[syncObject.recordType] {
+                        records.forEach {
+                            syncObject.add(record: $0)
+                        }
+                        
+                        changedRecords[syncObject.recordType] = nil
+                    }
+                
+            }
+            
+            for recordId in deletedRecordIds {
+                if let syncObject = self.syncObjects.first(where: { $0.zoneID == recordId.zoneID }) {
+                    syncObject.delete(recordID: recordId)
+                }
+            }
+
+            
             self.syncObjects.forEach {
                 $0.resolvePendingRelationships()
             }

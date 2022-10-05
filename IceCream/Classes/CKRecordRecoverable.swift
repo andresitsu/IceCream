@@ -145,6 +145,9 @@ extension CKRecordRecoverable where Self: Object {
                 {
                     primaryKeyForRecordID(recordID: owner.recordID, schema: schema).flatMap {
                         recordValue = realm.dynamicObject(ofType: ownerType, forPrimaryKey: $0)
+                        if recordValue == nil {
+                            print("Dangling reference. Cannot find record for id: \(owner.recordID)")
+                        }
                     }
                     // Because we use the primaryKey as recordName when object converting to CKRecord
                 }

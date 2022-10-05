@@ -45,6 +45,10 @@ public final class SyncObject<T, U, V, W> where T: Object & CKRecordConvertible 
 
 extension SyncObject: Syncable {
     
+    public var recordTypes: [String] {
+        return [T.recordType]
+    }
+    
     public var recordType: String {
         return T.recordType
     }
