@@ -15,7 +15,7 @@ import CloudKit
 
 public final class SyncEngine {
     
-    private let databaseManager: DatabaseManager
+    private var databaseManager: DatabaseManager?
     
     public convenience init(objects: [Syncable], databaseScope: CKDatabase.Scope = .private, container: CKContainer = .default()) {
         switch databaseScope {
@@ -36,31 +36,33 @@ public final class SyncEngine {
     }
     
     private func setup() {
-        databaseManager.prepare()
-        databaseManager.container.accountStatus { [weak self] (status, error) in
-            guard let self = self else { return }
-            switch status {
-            case .available:
-                self.databaseManager.registerLocalDatabase()
-                self.databaseManager.createCustomZonesIfAllowed()
-                self.databaseManager.fetchChangesInDatabase(nil)
-                self.databaseManager.resumeLongLivedOperationIfPossible()
-                self.databaseManager.startObservingRemoteChanges()
-                self.databaseManager.startObservingTermination()
-                self.databaseManager.createDatabaseSubscriptionIfHaveNot()
-            case .noAccount, .restricted:
-                guard self.databaseManager is PublicDatabaseManager else { break }
-                self.databaseManager.fetchChangesInDatabase(nil)
-                self.databaseManager.resumeLongLivedOperationIfPossible()
-                self.databaseManager.startObservingRemoteChanges()
-                self.databaseManager.startObservingTermination()
-                self.databaseManager.createDatabaseSubscriptionIfHaveNot()
-            case .temporarilyUnavailable:
-                break
-            case .couldNotDetermine:
-                break
-            @unknown default:
-                break
+        if let databaseManager = databaseManager {
+            databaseManager.prepare()
+            databaseManager.container.accountStatus { [weak self] (status, error) in
+                guard let self = self else { return }
+                switch status {
+                case .available:
+                    databaseManager.registerLocalDatabase()
+                    databaseManager.createCustomZonesIfAllowed()
+                    databaseManager.fetchChangesInDatabase(nil)
+                    databaseManager.resumeLongLivedOperationIfPossible()
+                    databaseManager.startObservingRemoteChanges()
+                    databaseManager.startObservingTermination()
+                    databaseManager.createDatabaseSubscriptionIfHaveNot()
+                case .noAccount, .restricted:
+                    guard self.databaseManager is PublicDatabaseManager else { break }
+                    databaseManager.fetchChangesInDatabase(nil)
+                    databaseManager.resumeLongLivedOperationIfPossible()
+                    databaseManager.startObservingRemoteChanges()
+                    databaseManager.startObservingTermination()
+                    databaseManager.createDatabaseSubscriptionIfHaveNot()
+                case .temporarilyUnavailable:
+                    break
+                case .couldNotDetermine:
+                    break
+                @unknown default:
+                    break
+                }
             }
         }
     }
@@ -74,13 +76,18 @@ extension SyncEngine {
     ///
     /// - Parameter completionHandler: Supported in the `privateCloudDatabase` when the fetch data process completes, completionHandler will be called. The error will be returned when anything wrong happens. Otherwise the error will be `nil`.
     public func pull(completionHandler: ((Error?) -> Void)? = nil) {
-        databaseManager.fetchChangesInDatabase(completionHandler)
+        databaseManager?.fetchChangesInDatabase(completionHandler)
     }
     
     /// Push all existing local data to CloudKit
     /// You should NOT to call this method too frequently
     public func pushAll() {
-        databaseManager.syncObjects.forEach { $0.pushLocalObjectsToCloudKit() }
+        databaseManager?.syncObjects.forEach { $0.pushLocalObjectsToCloudKit() }
+    }
+    
+    public func disable() {
+        databaseManager?.cleanUp()
+        databaseManager = nil
     }
     
 }
