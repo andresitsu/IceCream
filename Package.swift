@@ -9,12 +9,12 @@ let package = Package(
     products: [
         .library(
             name: "IceCream",
-            targets: ["IceCream"]),
+            targets: ["IceCream"])
     ],
     dependencies: [
         .package(
-            url: "https://github.com/realm/realm-swift", 
-            from: "10.33.0"
+            url: "https://github.com/realm/realm-swift",
+            from: "10.35.1"
         )
     ],
     targets: [
